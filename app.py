@@ -3,7 +3,7 @@ import numpy as np
 import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func,and_
 
 import datetime as dt
 import dateutil.relativedelta as relativedelta
@@ -44,7 +44,7 @@ def welcome():
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br/>"
         f"/api/v1.0/tobs<br/>"
-        f"/api/v1.0/start"
+        f"/api/v1.0/start<br/>"
         f"/api/v1.0/start/end<br/>"
     )
 
@@ -122,19 +122,57 @@ def tobs():
 # Return a JSON list of the minimum temperature, the average temperature, and the max temperature for a given start
 @app.route("/api/v1.0/<start>")
 def startDateStats(start):
-    # format of date yyyy-mm-dd
-    
-    return start
+
+    # format of date yyyymmdd
+    if len(start)==8:
+        startDate = dt.date(year=int(start[0:4]), month=int(start[4:6]), day=int(start[6:8]))
+     
+        # calculate `TMIN`, `TAVG`, and `TMAX` for  all dates greater than and equal to the start date
+        session = Session(engine)
+        startDateQuery = session.query(func.min(Measurement.tobs),func.avg(Measurement.tobs),func.max(Measurement.tobs))\
+        .filter(Measurement.date >= startDate).all()    
+        session.close()
+
+        # startDateQuery should only have 1 row
+        startDateStatsDict ={}
+        startDateStatsDict["TMIN"] = startDateQuery[0][0]
+        startDateStatsDict["TAVG"] = startDateQuery[0][1]
+        startDateStatsDict["TMAX"] = startDateQuery[0][2]
+
+        return jsonify(startDateStatsDict)
+
+    return jsonify({"error": f"Invalid date entry {start} . Please enter a valid date: yyyymmdd"}), 404
 
 
 # /api/v1.0/<start>/<end>
-# When given the start only, calculate `TMIN`, `TAVG`, and `TMAX` for all dates greater than and equal to the start date
-# Return a JSON list of the minimum temperature, the average temperature, and the max temperature for a given start or start-end range.
+# When given the start only, calculate `TMIN`, `TAVG`, and `TMAX` for start-end range.
+# Return a JSON list of the minimum temperature, the average temperature, and the max temperature for start-end range.
 @app.route("/api/v1.0/<start>/<end>")
 def startEndDateStats(start,end):
     # format of date yyyy-mm-dd
+
+    if len(start)==8 and len(end)==8:
+        startDate = dt.date(year=int(start[0:4]), month=int(start[4:6]), day=int(start[6:8]))
+        endDate = dt.date(year=int(end[0:4]), month=int(end[4:6]), day=int(end[6:8]))
+        # calculate `TMIN`, `TAVG`, and `TMAX` for  all dates greater than and equal to the start date and smaller than end date
+        session = Session(engine)
+        startEndDateQuery = session.query(func.min(Measurement.tobs),func.avg(Measurement.tobs),func.max(Measurement.tobs))\
+        .filter(and_(Measurement.date >= startDate,Measurement.date <= endDate)).all()    
+        session.close()
+
+        # startEndDateQuery should only have 1 row
+        startEndDateStatsDict ={}
+        startEndDateStatsDict["TMIN"] = startEndDateQuery[0][0]
+        startEndDateStatsDict["TAVG"] = startEndDateQuery[0][1]
+        startEndDateStatsDict["TMAX"] = startEndDateQuery[0][2]
+
+        return jsonify(startEndDateStatsDict)
+
+    return jsonify({"error": f"Invalid date entry/entries {start} and/or {end} . Please enter valid dates: yyyymmdd"}), 404
+
     
-    return f"From {start} To {end}"
+
+
 
 #################################################
 # Flask Run
